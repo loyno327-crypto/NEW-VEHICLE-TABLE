@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; padding: 16px; }
+      .row { margin-bottom: 10px; }
+      label { display: block; font-size: 13px; margin-bottom: 4px; }
+      input, select { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; }
+      .cargo { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+      .actions { display: flex; gap: 8px; margin-top: 14px; }
+      button { border: none; border-radius: 6px; padding: 9px 12px; cursor: pointer; }
+      .primary { background: #1a73e8; color: #fff; }
+      .danger { background: #ef4444; color: #fff; }
+      .muted { color: #6b7280; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <h2>Внести поездку</h2>
+
+    <div class="row">
+      <label>Основной маршрут</label>
+      <input id="mainRoute" placeholder="Ульяновск - Казань - Ульяновск" />
+    </div>
+
+    <div class="row">
+      <label>Дистанция (км)</label>
+      <input id="distanceKm" type="number" min="1" placeholder="800" />
+    </div>
+
+    <div class="row">
+      <label><input type="checkbox" id="emptyReturn" style="width:auto; margin-right:8px;"/> Обратный путь холостой</label>
+      <div class="muted">При выборе топливо обратного пути делится пополам между водителем и компанией.</div>
+    </div>
+
+    <h3>Маршруты грузов</h3>
+    <div id="cargoList"></div>
+    <button onclick="addCargo()">+ Добавить маршрут груза</button>
+
+    <div class="actions">
+      <button class="primary" onclick="submitForm()">Сохранить поездку</button>
+      <button onclick="google.script.host.close()">Отмена</button>
+    </div>
+
+    <script>
+      function addCargo(cargo = { route: '', price: '', paymentType: 'cash' }) {
+        const idx = document.querySelectorAll('.cargo').length;
+        const div = document.createElement('div');
+        div.className = 'cargo';
+        div.innerHTML = `
+          <div class="row">
+            <label>Маршрут груза</label>
+            <input class="cargo-route" value="${cargo.route}" placeholder="Ульяновск - Зеленодольск" />
+          </div>
+          <div class="row">
+            <label>Стоимость (₽)</label>
+            <input class="cargo-price" type="number" min="1" value="${cargo.price}" placeholder="30000" />
+          </div>
+          <div class="row">
+            <label>Тип оплаты</label>
+            <select class="cargo-payment">
+              <option value="cash" ${cargo.paymentType === 'cash' ? 'selected' : ''}>Наличные</option>
+              <option value="without_vat" ${cargo.paymentType === 'without_vat' ? 'selected' : ''}>Без НДС</option>
+              <option value="with_vat" ${cargo.paymentType === 'with_vat' ? 'selected' : ''}>С НДС</option>
+            </select>
+          </div>
+          <button class="danger" onclick="this.parentElement.remove()">Удалить маршрут</button>
+        `;
+        document.getElementById('cargoList').appendChild(div);
+      }
+
+      function submitForm() {
+        const cargos = [...document.querySelectorAll('.cargo')].map((block) => ({
+          route: block.querySelector('.cargo-route').value.trim(),
+          price: Number(block.querySelector('.cargo-price').value),
+          paymentType: block.querySelector('.cargo-payment').value
+        }));
+
+        const payload = {
+          mainRoute: document.getElementById('mainRoute').value.trim(),
+          distanceKm: Number(document.getElementById('distanceKm').value),
+          emptyReturn: document.getElementById('emptyReturn').checked,
+          cargos
+        };
+
+        google.script.run
+          .withSuccessHandler(() => {
+            alert('Поездка сохранена');
+            google.script.host.close();
+          })
+          .withFailureHandler((err) => alert(err.message))
+          .saveTrip(payload);
+      }
+
+      addCargo();
+    </script>
+  </body>
+</html>

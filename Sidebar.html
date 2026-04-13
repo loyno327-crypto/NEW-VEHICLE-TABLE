@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; padding: 12px; }
+      .toolbar { display: flex; gap: 8px; margin-bottom: 10px; }
+      button { border: none; border-radius: 6px; padding: 8px 10px; cursor: pointer; }
+      .btn-main { background: #1a73e8; color: #fff; }
+      .trip-item { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 8px; cursor: pointer; }
+      .trip-item:hover { background: #f9fafb; }
+      .muted { color: #6b7280; font-size: 12px; }
+      .hidden { display: none; }
+      .tabs { display: flex; gap: 8px; margin: 10px 0; }
+      .tab { background: #eef2ff; }
+      .tab.active { background: #1a73e8; color: white; }
+      .card { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-bottom: 8px; }
+      table { width: 100%; border-collapse: collapse; }
+      td, th { border-bottom: 1px solid #f0f0f0; padding: 6px; text-align: left; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <button class="btn-main" onclick="openForm()">Внести поездку</button>
+      <button onclick="loadTrips()">Обновить</button>
+    </div>
+
+    <div id="listView"></div>
+
+    <div id="detailView" class="hidden">
+      <button onclick="backToList()">← Назад</button>
+      <h3 id="tripTitle"></h3>
+      <div class="tabs">
+        <button id="tabMain" class="tab active" onclick="switchTab('main')">Поездка</button>
+        <button id="tabFunds" class="tab" onclick="switchTab('funds')">Движение средств</button>
+      </div>
+      <div id="mainTab"></div>
+      <div id="fundsTab" class="hidden"></div>
+    </div>
+
+    <script>
+      let selectedTrip = null;
+
+      function loadTrips() {
+        google.script.run.withSuccessHandler(renderTrips).fetchTrips();
+      }
+
+      function renderTrips(trips) {
+        const container = document.getElementById('listView');
+        if (!trips.length) {
+          container.innerHTML = '<p class="muted">Заявок пока нет.</p>';
+          return;
+        }
+
+        container.innerHTML = trips.map((trip) => `
+          <div class="trip-item" onclick="openTrip('${trip.id}')">
+            <strong>${trip.mainRoute}</strong>
+            <div class="muted">${new Date(trip.createdAt).toLocaleString('ru-RU')} • ${trip.distanceKm} км</div>
+            <div><b>${trip.displayTotal.toLocaleString('ru-RU')} ₽</b></div>
+          </div>
+        `).join('');
+      }
+
+      function openTrip(id) {
+        google.script.run.withSuccessHandler((trip) => {
+          selectedTrip = trip;
+          document.getElementById('listView').classList.add('hidden');
+          document.getElementById('detailView').classList.remove('hidden');
+          document.getElementById('tripTitle').textContent = trip.mainRoute;
+          renderMainTab(trip);
+          renderFundsTab(trip);
+          switchTab('main');
+        }).getTripDetails(id);
+      }
+
+      function renderMainTab(trip) {
+        const main = document.getElementById('mainTab');
+        main.innerHTML = `
+          <div class="card"><b>Основной маршрут:</b> ${trip.mainRoute}</div>
+          <div class="card"><b>Расстояние:</b> ${trip.distanceKm} км</div>
+          <div class="card"><b>Общая стоимость:</b> ${trip.totalRevenue.toLocaleString('ru-RU')} ₽</div>
+          <div class="card">
+            <b>Маршруты грузов</b>
+            <table>
+              <tr><th>Маршрут</th><th>Оплата</th><th>Стоимость</th></tr>
+              ${trip.cargos.map((c) => `<tr><td>${c.route}</td><td>${paymentName(c.paymentType)}</td><td>${Number(c.price).toLocaleString('ru-RU')} ₽</td></tr>`).join('')}
+            </table>
+          </div>
+        `;
+      }
+
+      function renderFundsTab(trip) {
+        const tab = document.getElementById('fundsTab');
+        tab.innerHTML = `
+          <div class="card"><b>Топливо:</b> ${trip.totalFuelCost.toLocaleString('ru-RU')} ₽</div>
+          <div class="card"><b>Остаток после топлива:</b> ${trip.netAmount.toLocaleString('ru-RU')} ₽</div>
+          <div class="card"><b>Лизинг (20%):</b> ${trip.leasingAmount.toLocaleString('ru-RU')} ₽</div>
+          <div class="card"><b>Ремонт/обслуживание (40%):</b> ${trip.maintenanceAmount.toLocaleString('ru-RU')} ₽</div>
+          <div class="card"><b>Налог водителя с НДС (19%):</b> ${trip.driverTaxAmount.toLocaleString('ru-RU')} ₽</div>
+          <div class="card"><b>Водителю:</b> ${trip.driverAmount.toLocaleString('ru-RU')} ₽</div>
+          <div class="card"><b>Топливо на холостой путь:</b> ${trip.emptyReturnFuelAmount.toLocaleString('ru-RU')} ₽</div>
+          <div class="card"><b>Остаток компании:</b> ${trip.companyAfterAdjustments.toLocaleString('ru-RU')} ₽</div>
+        `;
+      }
+
+      function paymentName(type) {
+        return {
+          cash: 'Наличные',
+          without_vat: 'Без НДС',
+          with_vat: 'С НДС'
+        }[type] || type;
+      }
+
+      function switchTab(tab) {
+        document.getElementById('mainTab').classList.toggle('hidden', tab !== 'main');
+        document.getElementById('fundsTab').classList.toggle('hidden', tab !== 'funds');
+        document.getElementById('tabMain').classList.toggle('active', tab === 'main');
+        document.getElementById('tabFunds').classList.toggle('active', tab === 'funds');
+      }
+
+      function backToList() {
+        document.getElementById('listView').classList.remove('hidden');
+        document.getElementById('detailView').classList.add('hidden');
+      }
+
+      function openForm() {
+        google.script.run.showTripForm();
+      }
+
+      loadTrips();
+    </script>
+  </body>
+</html>
